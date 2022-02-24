@@ -1,0 +1,274 @@
+{% extends 'index.html' %}
+{% block content %}
+<p>{{user_account.username}}</p>
+{{ request.user.username|json_script:"auth-user"}}
+{{ room_name|json_script:"room-name" }}
+{{ room_id|json_script:"room-id" }}
+<div class="container" id="myupdatingdiv">
+	{% csrf_token %}	
+	{% if not is_friend and not is_self %}
+	<p>Welcome {{request.user.username}}</p>
+	<input type="button" class="btn btn-primary" name="sendRequest" id="send_request_btn" data-id={{user_account.id}} value="Send request" {% if friend_request_status == -1 %} style="display: visible; " {%else %} style="display: none;" {% endif %}>
+
+	<input type="button" class="btn btn-danger" name="cancelRequest" id="cancel_request_btn" data-id={{user_account.id}} value="Cancel Request" {% if friend_request_status == 1 %} style="display: visible;" {% else %} style="display: none;" {% endif %}> 
+	{% endif %}
+	<a class="btn btn-primary" href="{% url 'home' %}" style="color: white;">Back to Chat</a>
+	</div>
+<div class="btn-group" id="respond_request_div" {% if friend_request_status == 0 %} style="display: visible;" {% else %} style="display: none;" {% endif %}>
+	<button type="button" class="btn btn-info dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+		<i class='fas fa-user'></i> Respond Request
+	</button>
+	<div class="dropdown-menu respond-menu">
+	<input type="button" class="btn btn-success"  value="Accept" id="respond-accept-btn-{{user_account.id}}" onclick='triggerAcceptFriendRequest("{{pending_request_id}}")'>
+	<input type="button" class="btn btn-danger" value="Decline" id="respond-decline-btn-{{user_account_id}}" onclick='triggerDeclineFriendRequest("{{pending_request_id}}")'>
+	</div>
+  </div>
+	
+	<div id="friends_function_div" {% if is_friend %} style="display: visible;" {% else %} style="display: none;" {% endif %}>
+		<a href="#" class="btn btn-outline-primary">Message</a>
+			<div class="btn-group">
+				<button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+					<i class='fas fa-check-double'></i>Friends
+				</button>
+				<div class="dropdown-menu friends">
+				<input type="button" id="unfriend_btn" data-id="{{user_account.id}}" class="dropdown-item friends-item" value="Unfriend">
+
+				</div>
+		  	</div>
+			<div class="dropdown">
+				<button class="btn btn-secondary dropdown-toggle btn-info" type="button" id="id_friends_toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+				Friends
+				</button>
+				<div class="dropdown-menu" aria-labelledby="id_friends_toggle">
+					<a class="dropdown-item" href="#" onclick="removeFriend('{{id}}', onFriendRemoved)">Unfriend</a>
+				</div>
+			</div>
+	</div>
+
+	{% endblock content %}
+{% block script %}
+<script>
+		SEND_REQUEST_SUCCESS = "Friend request has been sent."
+	REQUEST_ERROR = "Something went wrong."
+	NO_USER_ID = "Unable to perform action. User id not available."
+	REQUEST_ALREADY_SENT = "You have already sent the request."
+CANCEL_REQUEST_SUCCESS = "Friend request cancelled."
+const currentUser = JSON.parse(document.getElementById('auth-user').textContent);
+let sendRequestBtn = $('#send_request_btn')
+let cancelRequestBtn = $('#cancel_request_btn')
+        const roomName = JSON.parse(document.getElementById('room-name').textContent);
+
+        const friendrequestSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + '/ws/friendrequest/'
+            + roomName
+            + '/'
+        );
+        const roomId = JSON.parse(document.getElementById('room-id').textContent);
+
+        const uiUpdateSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + '/ws/uiupdate/'
+            + roomName
+            + '/'
+        );
+        // uiUpdateSocket.onopen = async function(e){
+        // 	console.log('open',e)
+        // 	sendRequestBtn.on('click',function(e){
+        // 		e.preventDefault()
+        // 		let send_to =  $(this).data("id")
+        // 		console.log("send to",send_to)
+
+        // 		let data = {
+        // 			'send_to': send_to,  			
+        // 		}
+        // 		data = JSON.stringify(data)
+        // 		uiUpdateSocket.send(data)
+        // 	}
+        // 	)
+
+        // }
+        uiUpdateSocket.onmessage = function(e){
+        	const data = JSON.parse(e.data);
+        	console.log(data);
+        	console.log("Ui update")
+        	console.log("Ui update ko lagi aako")
+        	if(data['result']==SEND_REQUEST_SUCCESS){
+        		console.log(data['connected_users'][0])
+        		data['connected_users'].forEach(user=>{
+        			if(user.username==currentUser){
+        				console.log("yo kyrox");
+        			}else if(user.username==""){
+        				console.log("yo kyrox");
+        			}
+        		})
+        		console.log("yo yei room maa matra ho matlab visited user ko profile herda")
+        		if(data['user_id']==$("#send_request_btn").data("id")){
+            		console.log("do nothing");
+            		 $("#cancel_request_btn").fadeIn(500).show();
+            		$("#send_request_btn").fadeOut(1000).hide();
+
+            	}else if(data['user_id']!=$("#send_request_btn").data("id")){
+            		console.log("yo arko user ko profile maa")
+            		$("#send_request_btn").fadeOut(1000).hide();
+        		$("#respond_request_div").fadeIn(1000).show();
+
+        }
+        	}else if(data['result']==CANCEL_REQUEST_SUCCESS){
+        		$("#respond_request_div").fadeOut(1000).hide();
+        		$("#send_request_btn").fadeIn(1000).show();
+
+        		console.log("Yo request cancel garda from the sender while current user is visiting sender's profile")
+        	}
+        }
+
+        friendrequestSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            // document.querySelector('#chat-log').value += (data.message + '\n');
+            
+
+            if(data['result'] == SEND_REQUEST_SUCCESS){
+            	console.log("first attempt",$("#send_request_btn").data("id"));
+            	console.log(data);
+
+            	if(data['user_id']==$("#send_request_btn").data("id")){
+            		console.log("do nothing");
+            		 $("#cancel_request_btn").fadeIn(500).show();
+            		$("#send_request_btn").fadeOut(1000).hide();
+
+            	}else if(data['user_id']!=$("#send_request_btn").data("id")){
+            		console.log("yo arko user ko profile maa")
+            		$("#send_request_btn").fadeOut(1000).hide();
+        		$("#respond_request_div").fadeIn(1000).show();
+
+        }
+            }
+            else if(data['result'] == CANCEL_REQUEST_SUCCESS){
+            	$("#cancel_request_btn").fadeOut(500).hide();
+	        $("#send_request_btn").fadeIn(500).show();
+            }
+            
+        };
+
+        friendrequestSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        // document.querySelector('#chat-message-input').focus();
+        // document.querySelector('#chat-message-input').onkeyup = function(e) {
+        //     if (e.keyCode === 13) {  // enter, return
+        //         document.querySelector('#chat-message-submit').click();
+        //     }
+        // };
+
+        // document.querySelector('#chat-message-submit').onclick = function(e) {
+        //     const messageInputDom = document.querySelector('#chat-message-input');
+        //     const message = messageInputDom.value;
+        //     chatSocket.send(JSON.stringify({
+        //         'message': message
+        //     }));
+        //     messageInputDom.value = '';
+        // };
+    </script>
+	<script type="text/javascript">
+		//Constants for comparing the request status
+	SEND_REQUEST_SUCCESS = "Friend request has been sent."
+	REQUEST_ERROR = "Something went wrong."
+	NO_USER_ID = "Unable to perform action. User id not available."
+	REQUEST_ALREADY_SENT = "You have already sent the request."
+
+	//query selectors
+	const csrf = document.getElementsByName('csrfmiddlewaretoken')[0].value 
+	const url = window.location.origin
+	console.log(url+'/friends/send_request/')
+	const sendBtn = document.getElementById('send_request_btn')
+	const cancelBtn = document.getElementById('cancel_request_btn')
+
+	// Sending friend request action
+	const send_request = (id,uiUpdateFunction) => {
+	    $.ajax({
+	        type: "POST",
+	        dataType: "json",
+	        url: url+'/friends/send_request/',
+	        timeout: 5000,
+	        data: {
+	            "csrfmiddlewaretoken":csrf,
+	            "receiver_user_id":id,
+	        },
+	        success: (data) => {
+	            console.log(data)
+	            if(data.result == REQUEST_ALREADY_SENT){
+	                console.log("request already sent")
+	            }
+	            else if(data.result!=null){
+	                console.log(data.result);
+	            } 
+	        },
+	        error: (data) => {
+	            alert("Something went wrong: " + data.result)
+	        },
+	        complete: (data) => {
+	            uiUpdateFunction()
+	        }
+	    })
+	}
+
+	if(sendBtn!=null){
+	sendBtn.addEventListener('click',function(e){
+	    receiver_id = e.target.getAttribute('data-id')
+	    send_request(receiver_id, onRequestSent)
+	})
+	}
+
+	var onRequestSent = () =>{
+	    console.log("I have been invoked")
+	    $("#send_request_btn").fadeOut(500).hide();
+	    $("#cancel_request_btn").fadeIn(500).show();
+	}
+
+	//Cancelling the Request by sender themselves
+	const cancel_request = (id,uiUpdateFunction) => {
+	    $.ajax({
+	        type: "POST",
+	        dataType: "json",
+	        url: url+'/friends/cancel_request/',
+	        timeout: 5000,
+	        data: {
+	            "csrfmiddlewaretoken":csrf,
+	            "receiver_user_id":id,
+	        },
+	        success: (data) => {
+	            console.log(data)
+	            // if(data.result == REQUEST_ALREADY_SENT){
+	            //     console.log("request already sent")
+	            // }
+	            // else if(data.result!=null){
+	            //     console.log(data.result);
+	            // } 
+	        },
+	        error: (data) => {
+	            alert("Something went wrong: " + data.result)
+	        },
+	        complete: (data) => {
+	            uiUpdateFunction()
+	        }
+	    })
+	}
+
+	if(cancelBtn!=null){
+	    cancelBtn.addEventListener('click',function(e){
+	        receiver_id = e.target.getAttribute('data-id')
+	        cancel_request(receiver_id, onRequestCancelled)
+	    })
+	    }
+	    
+	    var onRequestCancelled = () =>{
+	        console.log("I am cancel request")
+	        $("#cancel_request_btn").fadeOut(500).hide();
+	        $("#send_request_btn").fadeIn(500).show();
+	        
+	    }
+	</script>
+{% endblock script %}
